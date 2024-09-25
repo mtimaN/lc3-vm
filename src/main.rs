@@ -154,7 +154,48 @@ fn and(regs: &mut Registers, instr: u16) {
 }
 
 fn not(regs: &mut Registers, instr: u16) {
+    /* destination register (DR) */
+    let dr = (instr >> 9) & 0x7;
+    /* operand (SR) */
+    let sr = (instr >> 6) & 0x7;
 
+    *regs.get_register_mut(dr).unwrap() = !regs.get_register(sr).unwrap();
+    update_flags(regs.get_register(dr).unwrap(), &mut regs.cond);
+}
+
+fn br(regs: &mut Registers, instr: u16) {
+    let nzp = (instr >> 9) & 0x7;
+
+    let pc_offset = sign_extend(instr & 0x1FF, 9);
+
+    if nzp & regs.cond > 0 {
+        regs.pc += pc_offset;
+    }
+}
+
+fn jmp(regs: &mut Registers, instr: u16) {
+    let base_r = (instr >> 6) & 0x7;
+
+    if base_r == 7 {
+        regs.pc = regs.r7;
+    } else {
+        regs.pc = base_r;
+    }
+}
+
+fn jsr(regs: &mut Registers, instr: u16) {
+    let flag: bool = (instr >> 11) == 1;
+    regs.r7 = regs.pc;
+
+    if flag {
+        let pc_offset = sign_extend(instr & 0x7FF, 11);
+
+        regs.pc += pc_offset;
+    } else {
+        let base_r = (instr >> 6) & 0x7;
+
+        regs.pc = base_r;
+    }
 }
 
 fn ldi(regs: &mut Registers, instr: u16) {
@@ -166,6 +207,7 @@ fn ldi(regs: &mut Registers, instr: u16) {
 
     update_flags(r0, &mut regs.cond);
 }
+
 
 
 fn main() -> Result<(), u8> {
@@ -203,11 +245,11 @@ fn main() -> Result<(), u8> {
 
         match op {
             OpCode::Add => add(&mut regs, instr),
-            OpCode::And  => and(&mut regs, instr),
-            OpCode::Not  => not(&mut regs, instr),
-            OP_BR   => ,
-            OP_JMP  => ,
-            OP_JSR  => ,
+            OpCode::And => and(&mut regs, instr),
+            OpCode::Not => not(&mut regs, instr),
+            OpCode::Br  =>  br(&mut regs, instr),
+            OpCode::Jmp => jmp(&mut regs, instr),
+            OpCode::Jsr => jsr(&mut regs, instr),
             OP_LD   => ,
             OpCode::Ldi  => ldi(&mut regs, instr),
             OP_LDR  => ,

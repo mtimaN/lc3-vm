@@ -3,8 +3,8 @@ use std::env;
 use utils::registers::RegisterStore;
 
 use crate::utils::instructions;
-use crate::utils::registers::Registers;
 use crate::utils::registers::RegisterNumber;
+use crate::utils::registers::Registers;
 
 pub mod utils;
 
@@ -29,7 +29,6 @@ enum OpCode {
     Lea,    /* load effective address */
     Trap,   /* execute trap */
 }
-
 
 fn main() -> Result<(), u8> {
     let regs: Registers = Registers::default();
@@ -69,17 +68,17 @@ fn main() -> Result<(), u8> {
             OpCode::Add => instructions::add(&mut regs, instr),
             OpCode::And => instructions::and(&mut regs, instr),
             OpCode::Not => instructions::not(&mut regs, instr),
-            OpCode::Br  => instructions::br(&mut regs, instr),
+            OpCode::Br => instructions::br(&mut regs, instr),
             OpCode::Jmp => instructions::jmp(&mut regs, instr),
             OpCode::Jsr => instructions::jsr(&mut regs, instr),
-            OpCode::Ld  => instructions::ld(&mut regs, instr),
+            OpCode::Ld => instructions::ld(&mut regs, instr),
             OpCode::Ldi => instructions::ldi(&mut regs, instr),
             OpCode::Ldr => instructions::ldr(&mut regs, instr),
-            OP_LEA  => ,
-            OP_ST   => ,
-            OP_STI  => ,
-            OP_STR  => ,
-            OP_TRAP => ,
+            OpCode::Lea => instructions::lea(&mut regs, instr),
+            OpCode::St => instructions::st(&mut regs, instr),
+            OpCode::Sti => instructions::sti(&mut regs, instr),
+            OpCode::Str => instructions::str(&mut regs, instr),
+            OpCode::Trap => instructions::trap(&mut regs, instr),
             OpCode::Rti | OpCode::Res | _ => return Err(()),
         }
     }

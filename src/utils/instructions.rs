@@ -1,10 +1,36 @@
 use super::registers::{RegisterNumber, RegisterStore, Registers};
+// use super::mem_ops::;
 
 #[repr(u16)]
 pub enum Flag {
     Pos = 1 << 0, /* P */
     Zro = 1 << 1, /* Z */
     Neg = 1 << 2, /* N */
+}
+
+pub enum Trap {
+    Getc = 0x20,  /* get character from keyboard, not echoed onto the terminal */
+    Out = 0x21,   /* output a character */
+    Puts = 0x22,  /* output a word string */
+    In = 0x23,    /* get character from keyboard, echoed onto the terminal */
+    PutSP = 0x24, /* output a byte string */
+    Halt = 0x25,  /* halt the program */
+}
+
+impl TryFrom<u16> for Trap {
+    type Error = ();
+
+    fn try_from(v: u16) -> Result<Self, Self::Error> {
+        match v {
+            x if x == Trap::Getc as u16 => Ok(Trap::Getc),
+            x if x == Trap::Out as u16 => Ok(Trap::Out),
+            x if x == Trap::Puts as u16 => Ok(Trap::Puts),
+            x if x == Trap::In as u16 => Ok(Trap::In),
+            x if x == Trap::PutSP as u16 => Ok(Trap::PutSP),
+            x if x == Trap::Halt as u16 => Ok(Trap::Halt),
+            _ => Err(()),
+        }
+    }
 }
 
 fn sign_extend(x: u16, bit_count: u16) -> u16 {
@@ -100,44 +126,89 @@ pub fn jmp(regs: &mut Registers, instr: u16) {
     let base_r = (instr >> 6) & 0x7;
 
     if base_r == 7 {
-        regs.pc = regs.r7;
+        *regs.get_register_mut(RegisterNumber::PC) = regs.get_register(RegisterNumber::R7);
     } else {
-        regs.pc = base_r;
+        *regs.get_register_mut(RegisterNumber::PC) = base_r;
     }
 }
 
 pub fn jsr(regs: &mut Registers, instr: u16) {
     let flag: bool = (instr >> 11) == 1;
-    regs.r7 = regs.pc;
+
+    *regs.get_register_mut(RegisterNumber::R7) = regs.get_register(RegisterNumber::PC);
 
     if flag {
         let pc_offset = sign_extend(instr & 0x7FF, 11);
 
-        regs.pc += pc_offset;
+        *regs.get_register_mut(RegisterNumber::PC) += pc_offset;
     } else {
         let base_r = (instr >> 6) & 0x7;
 
-        regs.pc = base_r;
+        *regs.get_register_mut(RegisterNumber::PC) = base_r;
     }
 }
 
 pub fn ld(regs: &mut Registers, instr: u16) {
     /* destination register (DR) */
-    let dr = (instr >> 9) & 0x7;
+    let dr = ((instr >> 9) & 0x7).try_into().unwrap();
     let pc_offset = sign_extend(instr & 0x1FF, 9);
 
-    *regs.get_register_mut(dr) = mem_read(regs.pc + pc_offset);
+    *regs.get_register_mut(dr) = mem_read(regs.get_register(RegisterNumber::PC) + pc_offset);
 }
 
 pub fn ldi(regs: &mut Registers, instr: u16) {
-    let dr = (instr >> 9) & 0x7;
-    let pc_offset = sign_extend(instr & 0x1FF, 9);
+    let dr = ((instr >> 9) & 0x7).try_into().unwrap();
+    let pc_offset = sign_extend(instr & 0x1FF, 9); // 0x1FF = 0b111111111
 
     let r0 = *regs.get_register_mut(dr);
-    r0 = mem_read(mem_read(regs.pc + pc_offset));
+    r0 = mem_read(mem_read(regs.get_register(RegisterNumber::PC) + pc_offset));
 
     update_flags(
         regs.get_register(dr),
         regs.get_register_mut(RegisterNumber::Cond),
     );
+}
+
+pub fn ldr(regs: &mut Registers, instr: u16) {
+    let dr = ((instr >> 9) & 0x7).try_into().unwrap();
+    let base_r = (instr >> 6) & 0x7;
+    let pc_offset = sign_extend(instr & 0x3F, 6);
+
+    *regs.get_register_mut(dr) = mem_read(base_r + pc_offset);
+
+    update_flags(
+        regs.get_register(dr),
+        regs.get_register_mut(RegisterNumber::Cond),
+    );
+}
+
+pub fn lea(regs: &mut Registers, instr: u16) {
+    let dr = ((instr >> 9) & 0x7).try_into().unwrap();
+    let pc_offset = sign_extend(instr & 0x1FF, 9);
+
+    *regs.get_register_mut(dr) = regs.get_register(RegisterNumber::PC) + pc_offset;
+
+    update_flags(
+        regs.get_register(dr),
+        regs.get_register_mut(RegisterNumber::Cond),
+    );
+}
+
+pub fn st(regs: &mut Registers, instr: u16) {
+    // TODO after mem_write implementation
+}
+
+pub fn sti(regs: &mut Registers, instr: u16) {
+    // TODO after mem_write implementation
+}
+
+pub fn str(regs: &mut Registers, instr: u16) {
+    // TODO after mem_write implementation
+}
+
+pub fn trap(regs: &mut Registers, instr: u16) {
+    match (instr & 0xFF).try_into().unwrap() {
+        Trap::Puts => {}
+        _ => todo!(),
+    }
 }

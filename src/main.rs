@@ -1,38 +1,21 @@
 use std::env;
+use std::io::{Error, ErrorKind};
 
+use utils::instructions;
+use utils::instructions::OpCode;
+use utils::mem_ops::{mem_read, read_image};
+use utils::registers::RegisterNumber;
 use utils::registers::RegisterStore;
-
-use crate::utils::instructions;
-use crate::utils::registers::RegisterNumber;
-use crate::utils::registers::Registers;
+use utils::registers::Registers;
 
 pub mod utils;
 
 const MEMORY_MAX: usize = 1 << 16;
 type Memory = [u16; MEMORY_MAX];
 
-enum OpCode {
-    Br = 0, /* branch */
-    Add,    /* add  */
-    Ld,     /* load */
-    St,     /* store */
-    Jsr,    /* jump to subroutine */
-    And,    /* bitwise and */
-    Ldr,    /* load register */
-    Str,    /* store register */
-    Rti,    /* unused */
-    Not,    /* bitwise not */
-    Ldi,    /* load indirect */
-    Sti,    /* store indirect */
-    Jmp,    /* jump */
-    Res,    /* reserved (unused) */
-    Lea,    /* load effective address */
-    Trap,   /* execute trap */
-}
-
-fn main() -> Result<(), u8> {
-    let regs: Registers = Registers::default();
-    let memory: Memory;
+fn main() -> Result<(), Error> {
+    let mut regs: Registers = Registers::default();
+    let mut memory: Memory = [0; MEMORY_MAX];
 
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
@@ -41,9 +24,7 @@ fn main() -> Result<(), u8> {
     }
 
     for arg in args {
-        if !read_image(arg) {
-            println!("failed to load")
-        }
+        read_image(arg, &mut memory)?;
     }
 
     // todo!("Setup");
@@ -60,9 +41,9 @@ fn main() -> Result<(), u8> {
     while running {
         /* FETCH */
         let pc = regs.get_register_mut(RegisterNumber::PC);
-        let instr: u16 = mem_read(*pc);
+        let instr: u16 = mem_read(*pc, &mut memory);
         *pc += 1;
-        let op: OpCode = instr >> 12;
+        let op: OpCode = (instr >> 12).try_into().unwrap();
 
         match op {
             OpCode::Add => instructions::add(&mut regs, instr),
@@ -71,15 +52,17 @@ fn main() -> Result<(), u8> {
             OpCode::Br => instructions::br(&mut regs, instr),
             OpCode::Jmp => instructions::jmp(&mut regs, instr),
             OpCode::Jsr => instructions::jsr(&mut regs, instr),
-            OpCode::Ld => instructions::ld(&mut regs, instr),
-            OpCode::Ldi => instructions::ldi(&mut regs, instr),
-            OpCode::Ldr => instructions::ldr(&mut regs, instr),
+            OpCode::Ld => instructions::ld(&mut regs, instr, &mut memory),
+            OpCode::Ldi => instructions::ldi(&mut regs, instr, &mut memory),
+            OpCode::Ldr => instructions::ldr(&mut regs, instr, &mut memory),
             OpCode::Lea => instructions::lea(&mut regs, instr),
             OpCode::St => instructions::st(&mut regs, instr),
             OpCode::Sti => instructions::sti(&mut regs, instr),
             OpCode::Str => instructions::str(&mut regs, instr),
             OpCode::Trap => instructions::trap(&mut regs, instr),
-            OpCode::Rti | OpCode::Res | _ => return Err(()),
+            OpCode::Rti | OpCode::Res => {
+                return Err(Error::new(ErrorKind::Other, "Invalid Opcode"))
+            }
         }
     }
 

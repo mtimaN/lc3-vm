@@ -1,11 +1,57 @@
+use super::mem_ops::mem_read;
 use super::registers::{RegisterNumber, RegisterStore, Registers};
-// use super::mem_ops::;
+use crate::Memory;
 
 #[repr(u16)]
 pub enum Flag {
     Pos = 1 << 0, /* P */
     Zro = 1 << 1, /* Z */
     Neg = 1 << 2, /* N */
+}
+
+pub enum OpCode {
+    Br = 0, /* branch */
+    Add,    /* add  */
+    Ld,     /* load */
+    St,     /* store */
+    Jsr,    /* jump to subroutine */
+    And,    /* bitwise and */
+    Ldr,    /* load register */
+    Str,    /* store register */
+    Rti,    /* unused */
+    Not,    /* bitwise not */
+    Ldi,    /* load indirect */
+    Sti,    /* store indirect */
+    Jmp,    /* jump */
+    Res,    /* reserved (unused) */
+    Lea,    /* load effective address */
+    Trap,   /* execute trap */
+}
+
+impl TryFrom<u16> for OpCode {
+    type Error = ();
+
+    fn try_from(v: u16) -> Result<Self, Self::Error> {
+        match v {
+            x if x == OpCode::Br as u16 => Ok(OpCode::Br),
+            x if x == OpCode::Add as u16 => Ok(OpCode::Add),
+            x if x == OpCode::Ld as u16 => Ok(OpCode::Ld),
+            x if x == OpCode::St as u16 => Ok(OpCode::St),
+            x if x == OpCode::Jsr as u16 => Ok(OpCode::Jsr),
+            x if x == OpCode::And as u16 => Ok(OpCode::And),
+            x if x == OpCode::Ldr as u16 => Ok(OpCode::Ldr),
+            x if x == OpCode::Str as u16 => Ok(OpCode::Str),
+            x if x == OpCode::Rti as u16 => Ok(OpCode::Rti),
+            x if x == OpCode::Not as u16 => Ok(OpCode::Not),
+            x if x == OpCode::Ldi as u16 => Ok(OpCode::Ldi),
+            x if x == OpCode::Sti as u16 => Ok(OpCode::Sti),
+            x if x == OpCode::Jmp as u16 => Ok(OpCode::Jmp),
+            x if x == OpCode::Res as u16 => Ok(OpCode::Res),
+            x if x == OpCode::Lea as u16 => Ok(OpCode::Lea),
+            x if x == OpCode::Trap as u16 => Ok(OpCode::Trap),
+            _ => Err(()),
+        }
+    }
 }
 
 pub enum Trap {
@@ -148,20 +194,22 @@ pub fn jsr(regs: &mut Registers, instr: u16) {
     }
 }
 
-pub fn ld(regs: &mut Registers, instr: u16) {
+pub fn ld(regs: &mut Registers, instr: u16, memory: &mut Memory) {
     /* destination register (DR) */
     let dr = ((instr >> 9) & 0x7).try_into().unwrap();
     let pc_offset = sign_extend(instr & 0x1FF, 9);
 
-    *regs.get_register_mut(dr) = mem_read(regs.get_register(RegisterNumber::PC) + pc_offset);
+    *regs.get_register_mut(dr) =
+        mem_read(regs.get_register(RegisterNumber::PC) + pc_offset, memory);
 }
 
-pub fn ldi(regs: &mut Registers, instr: u16) {
+pub fn ldi(regs: &mut Registers, instr: u16, memory: &mut Memory) {
     let dr = ((instr >> 9) & 0x7).try_into().unwrap();
     let pc_offset = sign_extend(instr & 0x1FF, 9); // 0x1FF = 0b111111111
 
-    let r0 = *regs.get_register_mut(dr);
-    r0 = mem_read(mem_read(regs.get_register(RegisterNumber::PC) + pc_offset));
+    let addr = regs.get_register(RegisterNumber::PC) + pc_offset;
+    let r0 = regs.get_register_mut(dr);
+    *r0 = mem_read(mem_read(addr, memory), memory);
 
     update_flags(
         regs.get_register(dr),
@@ -169,12 +217,12 @@ pub fn ldi(regs: &mut Registers, instr: u16) {
     );
 }
 
-pub fn ldr(regs: &mut Registers, instr: u16) {
+pub fn ldr(regs: &mut Registers, instr: u16, memory: &mut Memory) {
     let dr = ((instr >> 9) & 0x7).try_into().unwrap();
     let base_r = (instr >> 6) & 0x7;
     let pc_offset = sign_extend(instr & 0x3F, 6);
 
-    *regs.get_register_mut(dr) = mem_read(base_r + pc_offset);
+    *regs.get_register_mut(dr) = mem_read(base_r + pc_offset, memory);
 
     update_flags(
         regs.get_register(dr),

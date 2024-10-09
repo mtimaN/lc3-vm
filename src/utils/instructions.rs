@@ -1,4 +1,6 @@
-use super::mem_ops::mem_read;
+use std::io::Write;
+
+use super::mem_ops::{mem_read, mem_write};
 use super::registers::{RegisterNumber, RegisterStore, Registers};
 use crate::Memory;
 
@@ -242,21 +244,53 @@ pub fn lea(regs: &mut Registers, instr: u16) {
     );
 }
 
-pub fn st(regs: &mut Registers, instr: u16) {
-    // TODO after mem_write implementation
+pub fn st(regs: &mut Registers, instr: u16, memory: &mut Memory) {
+    let sr = ((instr >> 9) & 0x7).try_into().unwrap();
+    let pc_offset = sign_extend(instr & 0x1FF, 9);
+
+    mem_write(
+        (regs.get_register(RegisterNumber::PC) + pc_offset) as usize,
+        regs.get_register(sr),
+        memory,
+    );
 }
 
-pub fn sti(regs: &mut Registers, instr: u16) {
-    // TODO after mem_write implementation
+pub fn sti(regs: &mut Registers, instr: u16, memory: &mut Memory) {
+    let sr = ((instr >> 9) & 0x7).try_into().unwrap();
+    let pc_offset = sign_extend(instr & 0x1FF, 9);
+
+    let address = mem_read(regs.get_register(RegisterNumber::PC) + pc_offset, memory);
+
+    mem_write(address.into(), sr, memory);
 }
 
-pub fn str(regs: &mut Registers, instr: u16) {
-    // TODO after mem_write implementation
+pub fn str(regs: &mut Registers, instr: u16, memory: &mut Memory) {
+    let sr = ((instr >> 9) & 0x7).try_into().unwrap();
+    let base_r = ((instr >> 9) & 0x7).try_into().unwrap();
+
+    let pc_offset = sign_extend(instr & 0x3F, 6);
+
+    mem_write(
+        (regs.get_register(base_r) + pc_offset).into(),
+        regs.get_register(sr),
+        memory,
+    );
 }
 
-pub fn trap(regs: &mut Registers, instr: u16) {
+pub fn trap(regs: &mut Registers, instr: u16, memory: &mut Memory) {
     match (instr & 0xFF).try_into().unwrap() {
-        Trap::Puts => {}
+        Trap::Puts => puts(regs, memory),
         _ => todo!(),
     }
+}
+
+fn puts(regs: &mut Registers, memory: &mut Memory) {
+    let mut c = regs.get_register(RegisterNumber::R0) as usize;
+
+    while memory[c] != 0 {
+        print!("{}", memory[c] as u8 as char); // cast u16 to u8 then to char
+        c += 1;
+    }
+
+    let _ = std::io::stdout().flush();
 }

@@ -56,10 +56,10 @@ fn main() -> Result<(), Error> {
             OpCode::Ldi => instructions::ldi(&mut regs, instr, &mut memory),
             OpCode::Ldr => instructions::ldr(&mut regs, instr, &mut memory),
             OpCode::Lea => instructions::lea(&mut regs, instr),
-            OpCode::St => instructions::st(&mut regs, instr),
-            OpCode::Sti => instructions::sti(&mut regs, instr),
-            OpCode::Str => instructions::str(&mut regs, instr),
-            OpCode::Trap => instructions::trap(&mut regs, instr),
+            OpCode::St => instructions::st(&mut regs, instr, &mut memory),
+            OpCode::Sti => instructions::sti(&mut regs, instr, &mut memory),
+            OpCode::Str => instructions::str(&mut regs, instr, &mut memory),
+            OpCode::Trap => instructions::trap(&mut regs, instr, &mut memory),
             OpCode::Rti | OpCode::Res => {
                 return Err(Error::new(ErrorKind::Other, "Invalid Opcode"))
             }

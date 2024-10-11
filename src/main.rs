@@ -37,7 +37,7 @@ fn main() -> Result<(), Error> {
     const PC_START: u16 = 0x3000;
     *regs.get_register_mut(RegisterNumber::PC) = PC_START;
 
-    let running: bool = true;
+    let mut running: bool = true;
     while running {
         /* FETCH */
         let pc = regs.get_register_mut(RegisterNumber::PC);
@@ -59,7 +59,7 @@ fn main() -> Result<(), Error> {
             OpCode::St => instructions::st(&mut regs, instr, &mut memory),
             OpCode::Sti => instructions::sti(&mut regs, instr, &mut memory),
             OpCode::Str => instructions::str(&mut regs, instr, &mut memory),
-            OpCode::Trap => instructions::trap(&mut regs, instr, &mut memory),
+            OpCode::Trap => instructions::trap(&mut regs, instr, &mut memory, &mut running),
             OpCode::Rti | OpCode::Res => {
                 return Err(Error::new(ErrorKind::Other, "Invalid Opcode"))
             }

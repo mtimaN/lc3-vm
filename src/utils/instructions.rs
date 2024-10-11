@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Read, Write};
 
 use super::mem_ops::{mem_read, mem_write};
 use super::registers::{RegisterNumber, RegisterStore, Registers};
@@ -277,11 +277,22 @@ pub fn str(regs: &mut Registers, instr: u16, memory: &mut Memory) {
     );
 }
 
-pub fn trap(regs: &mut Registers, instr: u16, memory: &mut Memory) {
+pub fn trap(regs: &mut Registers, instr: u16, memory: &mut Memory, running: &mut bool) {
     match (instr & 0xFF).try_into().unwrap() {
         Trap::Puts => puts(regs, memory),
+        Trap::Getc => getc(regs),
+        Trap::In => inp(regs),
+        Trap::PutSP => put_sp(regs, memory),
+        Trap::Halt => halt(running),
         _ => todo!(),
     }
+}
+
+fn getc(regs: &mut Registers) {
+    let reg = regs.get_register_mut(RegisterNumber::R0);
+    let mut buf: [u8; 1] = [0];
+    let _ = std::io::stdin().read_exact(&mut buf);
+    *reg = buf[0] as u16;
 }
 
 fn puts(regs: &mut Registers, memory: &mut Memory) {
@@ -293,4 +304,38 @@ fn puts(regs: &mut Registers, memory: &mut Memory) {
     }
 
     let _ = std::io::stdout().flush();
+}
+
+fn inp(regs: &mut Registers) {
+    print!("Enter a character:");
+
+    let reg = regs.get_register_mut(RegisterNumber::R0);
+    let mut buf: [u8; 1] = [0];
+    let _ = std::io::stdin().read_exact(&mut buf);
+
+    *reg = buf[0] as u16;
+
+    update_flags(*reg, regs.get_register_mut(RegisterNumber::Cond))
+}
+
+fn put_sp(regs: &mut Registers, memory: &mut Memory) {
+    let mut c = regs.get_register(RegisterNumber::R0) as usize;
+
+    while memory[c] != 0 {
+        let char = memory[c] & 0xFF;
+        print!("{}", char as u8 as char);
+        let char2 = memory[c] >> 8;
+        if char2 != 0 {
+            print!("{}", char2 as u8 as char);
+        }
+        c += 1;
+    }
+
+    let _ = std::io::stdout().flush();
+}
+
+fn halt(running: &mut bool) {
+    println!("HALT");
+    let _ = std::io::stdout().flush();
+    *running = false;
 }

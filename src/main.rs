@@ -7,6 +7,7 @@ use utils::mem_ops::{mem_read, read_image};
 use utils::registers::RegisterNumber;
 use utils::registers::RegisterStore;
 use utils::registers::Registers;
+use utils::unix_input_buffering::{disable_input_buffering, restore_input_buffering};
 
 pub mod utils;
 
@@ -14,6 +15,17 @@ const MEMORY_MAX: usize = 1 << 16;
 type Memory = [u16; MEMORY_MAX];
 
 fn main() -> Result<(), Error> {
+    let original_tio = disable_input_buffering();
+    if original_tio.is_err() {
+        return Err(Error::new(ErrorKind::NotFound, "Original tio not found"));
+    }
+    let original_tio = original_tio.unwrap();
+
+    ctrlc::set_handler(move || {
+        println!("received Ctrl+C!");
+        restore_input_buffering(original_tio);
+    })
+    .expect("Error setting Ctrl-C handler");
     let mut regs: Registers = Registers::default();
     let mut memory: Memory = [0; MEMORY_MAX];
 
@@ -26,8 +38,6 @@ fn main() -> Result<(), Error> {
     for arg in args {
         read_image(arg, &mut memory)?;
     }
-
-    // todo!("Setup");
 
     /* since exactly one condition flag should be set at any given time, set the Z flag */
     *regs.get_register_mut(RegisterNumber::Cond) = instructions::Flag::Zro as u16;
@@ -66,6 +76,6 @@ fn main() -> Result<(), Error> {
         }
     }
 
-    // todo!("Shutdown");
+    restore_input_buffering(original_tio);
     Ok(())
 }

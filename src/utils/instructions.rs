@@ -81,11 +81,11 @@ impl TryFrom<u16> for Trap {
     }
 }
 
-fn sign_extend(x: u16, bit_count: u16) -> u16 {
-    if (x >> (bit_count - 1)) & 1 == 1 {
-        x | 0xFFFF << bit_count
+fn sign_extend(x: u16, bit_count: u16) -> i16 {
+    if ((x >> (bit_count - 1)) & 1) == 1 {
+        (x | (0xFFFF << bit_count)) as i16
     } else {
-        x
+        x as i16
     }
 }
 
@@ -110,7 +110,7 @@ pub fn add(regs: &mut Registers, instr: u16) {
     let r1 = regs.get_register(sr1);
     if imm_flag == 1 {
         let imm5 = sign_extend(instr & 0x1F, 5);
-        *regs.get_register_mut(dr) = r1 + imm5;
+        *regs.get_register_mut(dr) = (r1 as i16).overflowing_add(imm5).0 as u16;
     } else {
         let sr2 = (instr & 0x7).try_into().unwrap();
 
@@ -134,7 +134,7 @@ pub fn and(regs: &mut Registers, instr: u16) {
     let r1 = regs.get_register(sr1);
     if imm_flag == 1 {
         let imm5 = sign_extend(instr & 0x1F, 5);
-        *regs.get_register_mut(dr) = r1 + imm5;
+        *regs.get_register_mut(dr) = (r1 as i16 + imm5) as u16;
     } else {
         let sr2 = (instr & 0x7).try_into().unwrap();
 
@@ -166,33 +166,31 @@ pub fn br(regs: &mut Registers, instr: u16) {
     let pc_offset = sign_extend(instr & 0x1FF, 9);
 
     if nzp & regs.get_register(RegisterNumber::Cond) > 0 {
-        *regs.get_register_mut(RegisterNumber::PC) += pc_offset;
+        *regs.get_register_mut(RegisterNumber::PC) =
+            (regs.get_register(RegisterNumber::PC) as i16 + pc_offset) as u16;
     }
 }
 
 pub fn jmp(regs: &mut Registers, instr: u16) {
-    let base_r = (instr >> 6) & 0x7;
+    let base_r = ((instr >> 6) & 0x7).try_into().unwrap();
 
-    if base_r == 7 {
-        *regs.get_register_mut(RegisterNumber::PC) = regs.get_register(RegisterNumber::R7);
-    } else {
-        *regs.get_register_mut(RegisterNumber::PC) = base_r;
-    }
+    *regs.get_register_mut(RegisterNumber::PC) = regs.get_register(base_r);
 }
 
 pub fn jsr(regs: &mut Registers, instr: u16) {
-    let flag: bool = (instr >> 11) == 1;
+    let flag = (instr >> 11) & 1;
 
     *regs.get_register_mut(RegisterNumber::R7) = regs.get_register(RegisterNumber::PC);
 
-    if flag {
+    if flag != 0 {
         let pc_offset = sign_extend(instr & 0x7FF, 11);
 
-        *regs.get_register_mut(RegisterNumber::PC) += pc_offset;
+        *regs.get_register_mut(RegisterNumber::PC) =
+            (regs.get_register(RegisterNumber::PC) as i16 + pc_offset) as u16;
     } else {
-        let base_r = (instr >> 6) & 0x7;
+        let base_r = ((instr >> 6) & 0x7).try_into().unwrap();
 
-        *regs.get_register_mut(RegisterNumber::PC) = base_r;
+        *regs.get_register_mut(RegisterNumber::PC) = regs.get_register(base_r);
     }
 }
 
@@ -201,15 +199,17 @@ pub fn ld(regs: &mut Registers, instr: u16, memory: &mut Memory) {
     let dr = ((instr >> 9) & 0x7).try_into().unwrap();
     let pc_offset = sign_extend(instr & 0x1FF, 9);
 
-    *regs.get_register_mut(dr) =
-        mem_read(regs.get_register(RegisterNumber::PC) + pc_offset, memory);
+    *regs.get_register_mut(dr) = mem_read(
+        (regs.get_register(RegisterNumber::PC) as i16 + pc_offset) as u16,
+        memory,
+    );
 }
 
 pub fn ldi(regs: &mut Registers, instr: u16, memory: &mut Memory) {
     let dr = ((instr >> 9) & 0x7).try_into().unwrap();
     let pc_offset = sign_extend(instr & 0x1FF, 9); // 0x1FF = 0b111111111
 
-    let addr = regs.get_register(RegisterNumber::PC) + pc_offset;
+    let addr = (regs.get_register(RegisterNumber::PC) as i16 + pc_offset) as u16;
     let r0 = regs.get_register_mut(dr);
     *r0 = mem_read(mem_read(addr, memory), memory);
 
@@ -221,10 +221,13 @@ pub fn ldi(regs: &mut Registers, instr: u16, memory: &mut Memory) {
 
 pub fn ldr(regs: &mut Registers, instr: u16, memory: &mut Memory) {
     let dr = ((instr >> 9) & 0x7).try_into().unwrap();
-    let base_r = (instr >> 6) & 0x7;
+    let base_r = ((instr >> 6) & 0x7).try_into().unwrap();
     let pc_offset = sign_extend(instr & 0x3F, 6);
 
-    *regs.get_register_mut(dr) = mem_read(base_r + pc_offset, memory);
+    *regs.get_register_mut(dr) = mem_read(
+        (regs.get_register(base_r) as i16 + pc_offset) as u16,
+        memory,
+    );
 
     update_flags(
         regs.get_register(dr),
@@ -236,7 +239,7 @@ pub fn lea(regs: &mut Registers, instr: u16) {
     let dr = ((instr >> 9) & 0x7).try_into().unwrap();
     let pc_offset = sign_extend(instr & 0x1FF, 9);
 
-    *regs.get_register_mut(dr) = regs.get_register(RegisterNumber::PC) + pc_offset;
+    *regs.get_register_mut(dr) = (regs.get_register(RegisterNumber::PC) as i16 + pc_offset) as u16;
 
     update_flags(
         regs.get_register(dr),
@@ -249,7 +252,7 @@ pub fn st(regs: &mut Registers, instr: u16, memory: &mut Memory) {
     let pc_offset = sign_extend(instr & 0x1FF, 9);
 
     mem_write(
-        (regs.get_register(RegisterNumber::PC) + pc_offset) as usize,
+        (regs.get_register(RegisterNumber::PC) as i16 + pc_offset) as usize,
         regs.get_register(sr),
         memory,
     );
@@ -259,19 +262,22 @@ pub fn sti(regs: &mut Registers, instr: u16, memory: &mut Memory) {
     let sr = ((instr >> 9) & 0x7).try_into().unwrap();
     let pc_offset = sign_extend(instr & 0x1FF, 9);
 
-    let address = mem_read(regs.get_register(RegisterNumber::PC) + pc_offset, memory);
+    let address = mem_read(
+        (regs.get_register(RegisterNumber::PC) as i16 + pc_offset) as u16,
+        memory,
+    );
 
     mem_write(address.into(), sr, memory);
 }
 
 pub fn str(regs: &mut Registers, instr: u16, memory: &mut Memory) {
     let sr = ((instr >> 9) & 0x7).try_into().unwrap();
-    let base_r = ((instr >> 9) & 0x7).try_into().unwrap();
+    let base_r = ((instr >> 6) & 0x7).try_into().unwrap();
 
     let pc_offset = sign_extend(instr & 0x3F, 6);
 
     mem_write(
-        (regs.get_register(base_r) + pc_offset).into(),
+        ((regs.get_register(base_r) as i16 + pc_offset as i16) as u16).into(),
         regs.get_register(sr),
         memory,
     );
@@ -284,7 +290,7 @@ pub fn trap(regs: &mut Registers, instr: u16, memory: &mut Memory, running: &mut
         Trap::In => inp(regs),
         Trap::PutSP => put_sp(regs, memory),
         Trap::Halt => halt(running),
-        _ => todo!(),
+        Trap::Out => out(regs),
     }
 }
 
@@ -338,4 +344,12 @@ fn halt(running: &mut bool) {
     println!("HALT");
     let _ = std::io::stdout().flush();
     *running = false;
+}
+
+fn out(regs: &mut Registers) {
+    print!(
+        "{}",
+        char::from_u32(regs.get_register(RegisterNumber::R0).into()).unwrap()
+    );
+    let _ = std::io::stdout().flush();
 }

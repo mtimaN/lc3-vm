@@ -1,11 +1,9 @@
-use nix::sys::select;
-use std::fs::File;
+use crossterm::event::poll;
+use std::io;
 use std::io::Error;
-use std::io::{self, Read};
 use std::os::unix::io::AsRawFd;
-use std::os::unix::io::RawFd;
 use std::time::Duration;
-use termios::{tcgetattr, tcsetattr, Termios, ECHO, ICANON, TCSANOW};
+use termios::{tcsetattr, Termios, ECHO, ICANON, TCSANOW};
 
 pub fn disable_input_buffering() -> Result<Termios, Error> {
     let stdin_fd = io::stdin().as_raw_fd();
@@ -28,12 +26,6 @@ pub fn restore_input_buffering(original_tio: Termios) -> Result<(), Error> {
 }
 
 pub fn check_key() -> bool {
-    let stdin_fd: RawFd = io::stdin().as_raw_fd();
-    let mut readfds = FdSet::new();
-    readfds.insert(stdin_fd);
-
     let timeout = Duration::from_secs(0);
-
-    let result = select(None, &mut readfds, None, None, Some(timeout));
-    result.map_or(false, |count| count > 0)
+    return poll(timeout).expect("Poll failed");
 }

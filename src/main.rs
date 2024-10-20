@@ -1,5 +1,6 @@
 use std::env;
 use std::io::{Error, ErrorKind};
+use std::process;
 
 use utils::instructions;
 use utils::instructions::OpCode;
@@ -23,7 +24,8 @@ fn main() -> Result<(), Error> {
 
     ctrlc::set_handler(move || {
         println!("received Ctrl+C!");
-        restore_input_buffering(original_tio);
+        restore_input_buffering(original_tio).expect("restore failed");
+        process::exit(0);
     })
     .expect("Error setting Ctrl-C handler");
     let mut regs: Registers = Registers::default();
@@ -35,7 +37,8 @@ fn main() -> Result<(), Error> {
         println!("lc3 [image-file1] ...")
     }
 
-    for arg in args {
+    for arg in args.into_iter().skip(1) {
+        dbg!(&arg);
         read_image(arg, &mut memory)?;
     }
 
@@ -76,6 +79,6 @@ fn main() -> Result<(), Error> {
         }
     }
 
-    restore_input_buffering(original_tio);
+    restore_input_buffering(original_tio).expect("restore failed");
     Ok(())
 }
